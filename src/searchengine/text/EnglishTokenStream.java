@@ -1,9 +1,8 @@
 package searchengine.text;
 
-import java.io.IOException;
 import java.io.Reader;
-import java.util.Iterator;
-import java.util.Scanner;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * An EnglishTokenStream creates tokens by splitting on whitespace.

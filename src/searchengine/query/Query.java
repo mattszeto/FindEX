@@ -1,5 +1,4 @@
 package searchengine.query;
-
 import searchengine.index.*;
 
 import java.util.List;

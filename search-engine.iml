@@ -27,5 +27,8 @@
         </SOURCES>
       </library>
     </orderEntry>
+    <orderEntry type="library" name="com.sparkjava:spark-template-thymeleaf:2.7.1" level="project" />
+    <orderEntry type="library" name="com.google.code.gson:gson:2.8.6" level="project" />
+    <orderEntry type="library" name="libstemmer" level="project" />
   </component>
 </module>

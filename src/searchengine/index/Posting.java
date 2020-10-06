@@ -7,30 +7,45 @@ import java.util.List;
  * A Posting encapulates a document ID associated with a search query component.
  */
 public class Posting {
-    private int mDocumentId;
-    private List<Integer> positions;
+	private int mDocumentId;
+	private List<Integer> positions;
+	private String mDocumentTitle;
+	
+	public Posting(int documentId, int position, String title) {
 
-    public Posting(int documentId, int position) {
+		mDocumentId = documentId;
+		mDocumentTitle = title;
+		positions = new ArrayList<Integer>();
+		positions.add(position);
+	}
 
-        mDocumentId = documentId;
-        positions = new ArrayList<Integer>();
-        positions.add(position);
-    }
+	public int getDocumentId() {
+		return mDocumentId;
+	}
 
-    public int getDocumentId() {
-        return mDocumentId;
-    }
+	/**
+	 * update positions list with a new position
+	 * @param position the new position to be added
+	 */
+	public void addPosition(int position) {
+		positions.add(position);
+	}
 
-    /**
-     * update positions list with a new position
-     *
-     * @param position the new position to be added
-     */
-    public void addPosition(int position) {
-        positions.add(position);
-    }
+	public List<Integer> getPositions() {
+		return positions;
+	}
 
-    public List<Integer> getPositions() {
-        return positions;
-    }
+	@Override
+	public String toString() {
+		return
+				"    <tr>\n" +
+				"        <td>"+mDocumentId+"</td>\n" +
+				"        <td><button id=\"" + mDocumentId + "\" onClick=\"docClicked(this.id)\" >"+mDocumentTitle+"</button></td>\n" +
+				"        <td>"+positions+"</td>\n" +
+				"    </tr>\n";
+	}
+
+	public String getDocumentTitle() {
+		return mDocumentTitle;
+	}
 }
