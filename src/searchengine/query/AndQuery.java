@@ -1,6 +1,7 @@
 package searchengine.query;
 
 import searchengine.index.Index;
+import searchengine.index.KGram;
 import searchengine.index.Posting;
 
 import java.util.ArrayList;
@@ -20,7 +21,12 @@ public class AndQuery implements Query {
 	}
 
 	@Override
-	public List<Posting> getPostings(Index index) {
+	public List<Posting> getPostingsPositions(Index index, KGram kGramIndex) {
+		return getPostings(index, kGramIndex);
+	}
+
+	@Override
+	public List<Posting> getPostings(Index index, KGram kGramIndex) {
 		List<Posting> result = new ArrayList<Posting>();
 
 		// Done: program the merge for an AndQuery, by gathering the postings of the composed QueryComponents and
@@ -32,19 +38,19 @@ public class AndQuery implements Query {
 		} {//if you only have to merge 2 postings
 
 			//verify the both terms appear at least in one document
-			if (mChildren.get(0).getPostings(index) != null &&
-					mChildren.get(1).getPostings(index) != null) {
+			if (mChildren.get(0).getPostings(index, kGramIndex) != null &&
+					mChildren.get(1).getPostings(index, kGramIndex) != null) {
 				//merge two postings together into result
-				result = andMergePosting(mChildren.get(0).getPostings(index), mChildren.get(1).getPostings(index));
+				result = andMergePosting(mChildren.get(0).getPostings(index, kGramIndex), mChildren.get(1).getPostings(index, kGramIndex));
 			}
 
 			//iterate through the rest of the postings
 			for (int i = 2; i < mChildren.size(); i++) {
 
 				//verify the next posting appears in at least 1 document
-				if (mChildren.get(i).getPostings(index) != null) {
+				if (mChildren.get(i).getPostings(index, kGramIndex) != null) {
 					//merge previous result postings with new term postings
-					result = andMergePosting(mChildren.get(i).getPostings(index), result);
+					result = andMergePosting(mChildren.get(i).getPostings(index, kGramIndex), result);
 				}
 
 			}

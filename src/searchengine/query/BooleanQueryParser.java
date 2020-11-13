@@ -1,5 +1,8 @@
 package searchengine.query;
 
+import searchengine.index.Index;
+import searchengine.index.KGram;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,6 +55,7 @@ public class BooleanQueryParser {
 			StringBounds nextSubquery = findNextSubquery(query, start);
 			// Extract the identified subquery into its own string.
 			String subquery = query.substring(nextSubquery.start, nextSubquery.start + nextSubquery.length);
+
 			int subStart = 0;
 
 			// Store all the individual components of this subquery.
@@ -67,7 +71,7 @@ public class BooleanQueryParser {
 				// Set the next index to start searching for a literal.
 				subStart = lit.bounds.start + lit.bounds.length;
 
-			} while (subStart < subquery.length());
+			} while (subStart < subquery.length()-1);
 
 			// After processing all literals, we are left with a conjunctive list
 			// of query components, and must fold that list into the final disjunctive list
@@ -156,10 +160,17 @@ public class BooleanQueryParser {
 			if (phraseEnd >= 0) {
 				lengthOut = phraseEnd - startIndex;
 
+				//split up the terms within the phrase
 				String[] splitPhrase = subquery.substring(startIndex, startIndex + lengthOut).split(" ");
 				List<Query> phraseTerms = new ArrayList<>();
 				for (int i = 0; i < splitPhrase.length; i++) {
-					phraseTerms.add(new TermLiteral(splitPhrase[i]));
+					//locate a wildcard within the term
+					int wildCard = splitPhrase[i].indexOf('*');
+					if (wildCard >= 0) {
+						phraseTerms.add(new WildcardLiteral(splitPhrase[i]));
+					} else {
+						phraseTerms.add(new TermLiteral(splitPhrase[i]));
+					}
 				}
 
 				// This is a phrase literal containing multiple terms.
@@ -167,6 +178,43 @@ public class BooleanQueryParser {
 						new StringBounds(startIndex, lengthOut),
 						new PhraseLiteral(phraseTerms));
 
+			}
+
+		}
+
+		// determine if a NEAR literal is next
+		// ex. [baseball NEAR/2 angels]
+		if (subquery.charAt(startIndex) == '[') {
+			startIndex++; // skip initial '['
+			int nearEnd = subquery.indexOf(']', startIndex+1);
+			if (nearEnd >= 0) {
+				lengthOut = nearEnd - startIndex;
+
+				// split literal into [ firstTerm, NEAR/k, secondTerm ]
+				String[] splitNEAR = subquery.substring(startIndex, startIndex + lengthOut).split(" ");
+				List<Query> nearTerms = new ArrayList<>();
+				int k = 0;
+				for (int i = 0; i < splitNEAR.length; i++) {
+					if(i == 1){
+						// second term is the NEAR/k, extract k
+						k = Integer.parseInt(splitNEAR[i].substring(5));
+					} else {
+						// check for wildcard
+						int wildCard = splitNEAR[i].indexOf('*');
+						if(wildCard >= 0) {
+							// wildcard literal
+							nearTerms.add(new WildcardLiteral(splitNEAR[i]));
+						} else {
+							// term literal
+							nearTerms.add(new TermLiteral(splitNEAR[i]));
+						}
+					}
+
+				}
+
+				return new Literal(
+						new StringBounds(startIndex, lengthOut),
+						new NearLiteral(nearTerms,k));
 			}
 
 		}

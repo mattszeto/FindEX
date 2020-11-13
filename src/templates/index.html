@@ -17,7 +17,10 @@
         <p>Enter Directory of Corpus to Index:</p>
         <input id="directoryInput"type="text" name="button1" value="" autocomplete="off"/>
 
-        <a id="submitButton" >SUBMIT</a>
+        <button id="submitButton" class="btn btn-secondary">SUBMIT</button>
+    </div>
+    <div id="diskIndex">
+        <button id="buildDiskIndex">Build Disk Index</button>
     </div>
 </div>
 
@@ -28,18 +31,17 @@
 <div id="SQueries" style="display: none; position: fixed; bottom: 10px; left: 10px;">
     <p>Special Queries:</p>
     <input id="squeryInput"type="text" name="squery" value="" autocomplete="off"/>
-    <a id="squeryButton">SUBMIT</a>
+    <button id="squeryButton">SUBMIT</button>
 
 </div>
 
-<iframe id="searchFrame" style="display: none; position: fixed; bottom: 20px; right: 10px; width: 50%; height: 90%; border: solid 1px #333333; " src="/search"></iframe>
+<iframe id="searchFrame" style="display: none; resize: both; overflow: hidden; position: fixed; bottom: 20px; right: 10px; width: 50%; height: 90%; border: solid 1px #333333; " src="/search"></iframe>
 
 <!-- Optional JavaScript -->
 <!-- jQuery first, then Popper.js, then Bootstrap JS -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
-
 
 <script>
     // javascript functions
@@ -63,6 +65,24 @@
                 });
                 $("#submitButton").hide();
                 $("#dir").hide();
+                $("#diskIndex").hide();
+                $("#SQueries").show();
+            }
+        });
+    });
+    //build index from disk storage button
+    $(function() {
+        $("#buildDiskIndex").on("click", function(evt) {
+            let directoryValue = document.getElementById("directoryInput").value;
+            if(directoryValue == "") {
+                alert("Directory cannot be empty");
+            } else {
+                $.post("/buildindex", {directoryValue: directoryValue}, function(result) {
+                    $(result).prependTo($("#maindiv"));
+                });
+                $("#submitButton").hide();
+                $("#dir").hide();
+                $("#diskIndex").hide();
                 $("#SQueries").show();
             }
         });

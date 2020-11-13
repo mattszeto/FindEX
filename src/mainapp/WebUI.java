@@ -1,36 +1,40 @@
 package mainapp;
 
+import searchengine.accumulator.Accumulator;
 import searchengine.documents.Document;
 import searchengine.documents.DocumentCorpus;
-import searchengine.index.Index;
-import searchengine.index.KGramIndex;
-import searchengine.index.Posting;
-
+import searchengine.index.*;
 import spark.ModelAndView;
 import spark.Spark;
 import spark.template.thymeleaf.ThymeleafTemplateEngine;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.PriorityQueue;
+
+import static java.util.stream.Collectors.joining;
 
 public class WebUI {
     public static Indexer indexer = new Indexer();
     public static Index index = null;
-    public static KGramIndex kGramIndex = new KGramIndex();
+    public static KGram kGramIndex = null;
     public static String dir = "";
-    public static ArrayList<Posting> postings = new ArrayList();
     public static DocumentCorpus corpus = null;
+    public static DiskIndexWriter diskIndexWriter = new DiskIndexWriter();
+
+    public static boolean isDiskIndex = false;
+    private static double buildIndexTime = 0;
 
     public static void main(String args[]) {
 
+        System.out.println("http://localhost:4567/");
         Spark.staticFileLocation("public_html");
-        /** testing environment: http://localhost:4567/ **/
+        /* testing environment: http://localhost:4567/ */
         // creates thymeleaf template for index.html at /
         Spark.get("/", (req, res) -> {
-            HashMap<String, Object> model =  new HashMap<>();
+            HashMap<String, Object> model = new HashMap<>();
             return new ThymeleafTemplateEngine().render(new ModelAndView(model, "index"));
         });
 
@@ -40,34 +44,103 @@ public class WebUI {
             return new ThymeleafTemplateEngine().render(new ModelAndView(model, "search-window"));
         });
 
-        // posts directory
+        // posts directory, builds index
         Spark.post("/", (request, response) -> {
+            isDiskIndex = false;
             String directoryValue = request.queryParams("directoryValue");
             dir = directoryValue;
             corpus = indexer.requestDirectory(dir);
-            index = indexer.timeIndexBuild(corpus, kGramIndex);
-            return "<div style=\"font-size: 12px; position:\">Files Indexed From: " + directoryValue + " Time to Index:"+ indexer.getTimeToBuildIndex() +  " seconds</div>";
+            kGramIndex = new KGramIndex();
+            index = indexer.timeIndexBuild(corpus, kGramIndex, dir);
+            diskIndexWriter.writeIndex(index, dir);//calls the writer of index to disk
+            return "<div style=\"font-size: 12px; position:\">Files Indexed From: " + directoryValue + " </br>Time to Index: " + indexer.getTimeToBuildIndex() + " seconds</div></br>";
+        });
+
+        Spark.post("/buildindex", (request, response) -> {
+            isDiskIndex = true;
+            dir = request.queryParams("directoryValue");
+            corpus = indexer.requestDirectory(dir);
+            index = buildDiskPositionalIndex(dir);//builds positional index and k-gram index
+            return "<div style=\"font-size: 12px; position:\">Built Disk Index From: " + dir + " </br>Time to Index: " + buildIndexTime + " seconds</div>";
         });
 
         // posts query values based on query inputs from client (outputs as html table)
+
         Spark.post("/search", (request, response) -> {
             String queryValue = request.queryParams("queryValue");
+            long startTime = System.nanoTime();
+            List<Posting> postings;
+            postings = indexer.userBooleanQueryInput(corpus, index, kGramIndex, queryValue);
 
-            postings = (ArrayList<Posting>) indexer.userQueryInput(corpus, index, queryValue);
+            StringBuilder postingsRows = new StringBuilder();
+
+            for (Posting post : postings) {//include document titles for each returned posting
+
+                String title = corpus.getDocument(post.getDocumentId()).getTitle();
+                String row = "    <tr>\n" +
+                        "        <td>" + post.getDocumentId() + "</td>\n" +
+                        "        <td><button id=\"" + post.getDocumentId() + "\" onClick=\"docClicked(this.id)\" >" + title + "</button></td>\n" +
+                        "        <td>" + post.getPositions() + "</td>\n" +
+                        "    </tr>\n";
+                postingsRows.append(row);
+
+            }
+
+            long stopTime = System.nanoTime();
+            buildIndexTime = (double) (stopTime - startTime) / 1_000_000_000.0;
+            System.out.println("Query Time: " + buildIndexTime + " seconds");
 
             return "<div><b>Query: </b>" + queryValue +
-                    "<table id=\"document-table\" style=\"width:100%\">\n" +
+                    "<div>Total Documents: " + postings.size() + "</div></div></br>" +
+                    "<table style=\"width:100%\">\n" +
                     "    <tr>\n" +
                     "        <th>Document ID</th>\n" +
                     "        <th>Document Title</th>\n" +
                     "        <th>Positions</th>\n" +
                     "    </tr>\n" +
-                         postings.toString() +
-                    "</table>" +
-                    "<div>Total Documents: " + postings.size() + "</div></div>" ;
+                    postingsRows.toString() +
+                    "</table>"
+                    ;
+        });
+
+        // post ranked query values based on query inputs from client (outputs as html table)
+
+        Spark.post("/ranked-search", (request, response) -> {
+            String queryValue = request.queryParams("queryValue");
+            PriorityQueue<Accumulator> pq = Indexer.userRankedQueryInput(corpus, (DiskPositionalIndex) index, kGramIndex, queryValue);
+            StringBuilder postingsRows = new StringBuilder();
+            String suggestedQuery = indexer.getSuggestedQuery();
+
+            int pqSize = pq.size();
+            while (!pq.isEmpty()) {
+                Accumulator currAcc = pq.poll();
+                String title = corpus.getDocument(currAcc.getDocId()).getTitle();
+                int docId = currAcc.getDocId();
+                double value = currAcc.getA_d();
+                String row = "    <tr>\n" +
+                        "        <td>" + docId + "</td>\n" +
+                        "        <td><button id=\"" + docId + "\" onClick=\"docClicked(this.id)\" >" + title + "</button></td>\n" +
+                        "        <td>" + value + "</td>\n" +
+                        "    </tr>\n";
+                postingsRows.insert(0, row);
+            }
+
+            return "<div><b>Top 10 Results for: </b>" + queryValue +
+                    "<div>Suggested Query: <button id=\"spelling-correction-btn\" onClick=\"suggestedQueryClicked(this.value)\">" + suggestedQuery + "</button></div>" +
+                    "<div>Total Documents: " + pqSize + "</div></div></br>" +
+                    "<table style=\"width:100%\">\n" +
+                    "    <tr>\n" +
+                    "        <th>Document Id</th>\n" +
+                    "        <th>Document Title</th>\n" +
+                    "        <th>Score</th>\n" +
+                    "    </tr>\n" +
+                    postingsRows.toString() +
+                    "</table>"
+                    ;
         });
 
         // posts document contents as a div
+
         Spark.post("/document", (request, response) -> {
             String docid = request.queryParams("docValue");
             int id = Integer.parseInt(docid);
@@ -79,38 +152,67 @@ public class WebUI {
             int readerCharValue;
             try {
                 while ((readerCharValue = reader.read()) != -1) {//read each char from the reader
-                    content.append((char)readerCharValue);//convert the value to a char, add to builder
+                    content.append((char) readerCharValue);//convert the value to a char, add to builder
                 }
             } catch (IOException ioe) {
                 ioe.printStackTrace();
             }
-            return "</br><div style=\"\"> " + content.toString() + " </div>";
+            return "</br><div style=\"\"> " + content.toString() + " </div></br>";
         });
 
         // handles special queries from client (posts as a div to client)
+
         Spark.post("/squery", (request, response) -> {
             String squeryValue = request.queryParams("squeryValue");
             String stemmedTerm;
+            if (squeryValue.length() == 2 && squeryValue.substring(1, 2).equals("q")) {
+                System.out.println("\nEnding program...");
+                System.exit(-1);
+            }
             if (squeryValue.length() >= 5 && squeryValue.substring(1, 5).equals("stem")) {
                 stemmedTerm = indexer.userSQueryStem(squeryValue);
                 System.out.printf("%s stemmed to: %s", squeryValue.substring(6), stemmedTerm);
                 System.out.println();
-                return "<div style=\"font-size: 12px;\">"+ squeryValue + " stemmed to: " + stemmedTerm + "</div>";
+                return "</br><div style=\"font-size: 12px;\">" + squeryValue + " stemmed to: " + stemmedTerm + "</div></br>";
                 //build a new index from the given directory
             } else if (squeryValue.length() >= 6 && squeryValue.substring(1, 6).equals("index")) {
-                System.out.println("Resetting the directory...");
+                System.out.println("Resetting the directory...");//re-build an in-memory index
                 dir = squeryValue.substring(7);
                 corpus = indexer.requestDirectory(dir);
-                index = indexer.timeIndexBuild(corpus, kGramIndex);
-                return "<div style=\"font-size: 12px\">New Files Indexed From: " + dir + "</div> <div style=\"font-size: 10px\">Time to Index:"+ indexer.getTimeToBuildIndex() +  " seconds</div>";
+                index = indexer.timeIndexBuild(corpus, kGramIndex, dir);
+                diskIndexWriter.writeIndex(index, dir);//calls the writer of index to disk
+                return "<div style=\"font-size: 12px\">New Files Indexed From: " + dir + "</div> </br> <div style=\"font-size: 10px\">Time to Index:" + indexer.getTimeToBuildIndex() + " seconds</div>";
                 //print the first 1000 terms in the vocabulary
             } else if (squeryValue.length() == 6 && squeryValue.substring(1, 6).equals("vocab")) {
-                List<String> vocabList = indexer.userSQueryVocab();
-                return "<div style=\"font-size: 12px;\">"+ vocabList +" </br style=\"font-size: 15;\"># of vocab terms: " + vocabList.size() + "</div>";
+                List<String> vocabList = indexer.userSQueryVocab(index);//gather vocab list from any index
+                List<String> subVocab = null;
+                if (vocabList.size() >= 1000) {
+                    subVocab = vocabList.subList(0, 999);
+                } else {
+                    subVocab = vocabList.subList(0, vocabList.size() - 1);
+                }
+                String formattedVocabList = subVocab.stream().map(item -> "" + item + "</br>").collect(joining(" "));
+                return "<b style=\"font-size: 15px;\"># of vocab terms: " + vocabList.size() + "</b></div></br>" + " </br> <div style=\"font-size: 12px;\">" + formattedVocabList + "</br>";
             } else {
-                return "<div style=\"font-size: 12px;\">Not Valid Special Query</div>";
+                return "<div style=\"font-size: 12px;\">Not Valid Special Query</div></br>";
             }
         });
 
     }
+
+    public static DiskPositionalIndex buildDiskPositionalIndex(String dir) {
+
+        //measure how long it takes to build the index
+        long startTime = System.nanoTime();
+        DiskPositionalIndex index = new DiskPositionalIndex(dir);
+        System.out.println(index.getKeyTermAddress("fire"));
+        kGramIndex = new DiskKGramIndex(dir);
+        long stopTime = System.nanoTime();
+        buildIndexTime = (double) (stopTime - startTime) / 1_000_000_000.0;
+        System.out.println("Done!\n");
+        System.out.println("Time to build index: " + buildIndexTime + " seconds");
+
+        return index;
+    }
+
 }
