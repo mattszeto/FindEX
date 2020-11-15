@@ -1,5 +1,12 @@
 ### Search Engine
-Search Engine using: Positional Inverted Index, K-gram Index, Porter2Stemmer Algorithm
+Search Engine:
+- Boolean Queries: Positional Inverted Index, K-gram Index, Porter2Stemmer Algorithm
+  - K-Grams
+  - Stemming
+  - NEAR/k Queries
+  - Wildcard Queries
+- Ranked Queries: Disk Positional Index, K-gram Index on Disk
+  - Spelling Check (Suggested Queries): Jaccard Coefficient, Levenshtein Edit Distance
 
 Dependencies:
 - SparkJava w/ Thymeleaf-Template: `com.sparkjava:spark-template-thymeleaf:2.7.1`
