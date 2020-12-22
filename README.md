@@ -14,7 +14,7 @@ Dependencies:
 - libstemmer (porter2stemmer): `tartarus snowball-stemmer`
 - mapdb (b+tree for on-disk index): `org.mapdb`
 
-###How to run search engine: (2 Ways)
+### How to run search engine: (2 Ways)
 #### CMD text:
 You can run our search engine in the command line by running `indexer.java`
 1. Open up your favorite text-editor or IDE (project developed on `intellij`)
